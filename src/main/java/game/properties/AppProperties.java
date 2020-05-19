@@ -11,6 +11,8 @@ public class AppProperties {
     private static final Properties properties = LoadProperties.load(APP_PROPERTIES_PATH);
     public static final String BASE_URL = properties.getProperty("url");
     public static final String GAME_SERVICE_URL = properties.getProperty("game_service");
+    public static final String ORGANIZATION = properties.getProperty("organization");
+    public static final String VIKINGS_GAME_ID = properties.getProperty("vikings_game_id");
 
     private AppProperties() {
     }

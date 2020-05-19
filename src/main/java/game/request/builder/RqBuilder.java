@@ -1,5 +1,6 @@
-package game.request;
+package game.request.builder;
 
+import game.request.Function;
 import io.restassured.specification.RequestSpecification;
 
 import static game.properties.AppProperties.BASE_URL;
@@ -21,7 +22,7 @@ public class RqBuilder {
         return this;
     }
 
-    public RqBuilder withGameId(int gameId) {
+    public RqBuilder withGameId(String gameId) {
         spec.queryParam("gameid", gameId);
         return this;
     }
@@ -41,13 +42,33 @@ public class RqBuilder {
         return this;
     }
 
-    public RqBuilder withCoin(Double coin) {
+    public RqBuilder withCoin(double coin) {
         spec.queryParam("coin", coin);
         return this;
     }
 
     public RqBuilder withAmount(double amount) {
         spec.queryParam("amount", amount);
+        return this;
+    }
+
+    public RqBuilder withWagerId(String wagerId) {
+        spec.queryParam("wagerid", wagerId);
+        return this;
+    }
+
+    public RqBuilder withStep(int step) {
+        spec.queryParam("step", step);
+        return this;
+    }
+
+    public RqBuilder withBetId(int betId) {
+        spec.queryParam("betid", betId);
+        return this;
+    }
+
+    public RqBuilder withCmd(String cmd) {
+        spec.queryParam("cmd", cmd);
         return this;
     }
 
