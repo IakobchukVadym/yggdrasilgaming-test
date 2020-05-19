@@ -6,7 +6,7 @@ import game.model.response.play.BetsItem;
 import game.model.response.play.Data;
 import game.model.response.play.Eventdata;
 import game.model.response.play.PlayRS;
-import game.request.RqBuilder;
+import game.model.response.winplay.WinPlayRS;
 import io.restassured.specification.RequestSpecification;
 import lombok.NonNull;
 import org.assertj.core.api.SoftAssertions;
@@ -14,63 +14,91 @@ import org.junit.jupiter.api.Test;
 
 import static game.request.Function.AUTHENTICATE;
 import static game.request.Function.PLAY;
+import static game.request.builder.VikingsRqBuilder.getBaseVikingsRqBuilder;
 
 public class GameTest implements BaseTest {
 
     @Test
     void spinUntilWinTest() {
-        RequestSpecification authSpec = new RqBuilder()
+        RequestSpecification authVikingSpec = getBaseVikingsRqBuilder()
                 .withFunction(AUTHENTICATE)
-                .withOrganization("Demo")
                 .build();
 
-        AuthRS authRS = gameService.getAuthentication(authSpec);
+        AuthRS authRS = gameService.getAuthentication(authVikingSpec);
 
-        String session = authRS.getData().getSessid();
-        double bet = 1.25;
+        String sessid = authRS.getData().getSessid();
         double actualBalance = Double.parseDouble(authRS.getData().getBalance().getCash());
-        RequestSpecification playSpec = getPlaySpec(session, bet);
+        double bet = 1.25;
+
+        RequestSpecification playSpec = getPlaySpec(sessid, bet);
 
         SoftAssertions softAssertions = new SoftAssertions();
+        PlayRS pendingPlayRS = null;
         boolean win = false;
+
         while (!win) {
-            PlayRS playRS = gameService.getPlay(playSpec);
-            win = isWinner(playRS.getData());
-            Double initialBalance = getInitialBalance(playRS.getData());
+            pendingPlayRS = gameService.getPlay(playSpec);
+            win = pendingPlayRS.getData().getWager().getStatus().equals("Pending");
+            Double initialBalance = getInitialBalance(pendingPlayRS.getData());
 
             softAssertions.assertThat(initialBalance)
                     .as("Initial balance should be equal to previous balance minus bet")
                     .isEqualTo(actualBalance);
-            softAssertions.assertThat(playRS.getFn())
+            softAssertions.assertThat(pendingPlayRS.getFn())
                     .as("Function name should be Play")
                     .isEqualTo(PLAY.getName());
 
             actualBalance -= bet;
         }
+
+        double winAmountFromPendingRs = getWinAmountFromPendingRs(pendingPlayRS.getData());
+        String wagerIdFromPendingRS = pendingPlayRS.getData().getWager().getWagerid();
+
+        RequestSpecification winPlaySpec = getWinPlaySpec(sessid, wagerIdFromPendingRS);
+        WinPlayRS winPlayRS = gameService.getWinPlay(winPlaySpec);
+
+        double buyBal = Double.parseDouble(winPlayRS.getData().getBuyBal().getCash());
+        double resultBal = Double.parseDouble(winPlayRS.getData().getResultBal().getCash());
+        String wagerId = winPlayRS.getData().getWager().getWagerid();
+        String status = winPlayRS.getData().getWager().getStatus();
+
+        softAssertions.assertThat(buyBal).isEqualTo(actualBalance);
+        softAssertions.assertThat(resultBal).isEqualTo(actualBalance + winAmountFromPendingRs);
+        softAssertions.assertThat(wagerId).isEqualTo(wagerIdFromPendingRS);
+        softAssertions.assertThat(status).isEqualTo("Finished");
         softAssertions.assertAll();
     }
 
     private RequestSpecification getPlaySpec(String session, double bet) {
-        return new RqBuilder()
+        return getBaseVikingsRqBuilder()
                 .withFunction(PLAY)
-                .withGameId(7316)
-                .withLanguage("en")
-                .withCurrency("EUR")
                 .withSession(session)
                 .withCoin(0.05)
                 .withAmount(bet)
                 .build();
     }
 
-    private boolean isWinner(@NonNull Data data) {
+    private RequestSpecification getWinPlaySpec(String session, String wagerId) {
+        return getBaseVikingsRqBuilder()
+                .withFunction(PLAY)
+                .withSession(session)
+                .withStep(2)
+                .withBetId(1)
+                .withCmd("C")
+                .withWagerId(wagerId)
+                .build();
+    }
+
+    private double getWinAmountFromPendingRs(@NonNull Data data) {
         return data.getWager().getBets().stream()
                 .map(BetsItem::getEventdata)
                 .map(Eventdata::getAccWa)
                 .map(Double::parseDouble)
-                .anyMatch(result -> result > 0);
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("AccWa should always be present in Pending response"));
     }
 
-    private Double getInitialBalance(@NonNull Data data) {
+    private double getInitialBalance(@NonNull Data data) {
         return data.getWager().getBets().stream()
                 .map(BetsItem::getBetdata)
                 .map(Betdata::getInitialBalance)
